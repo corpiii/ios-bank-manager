@@ -28,18 +28,45 @@ struct Bank: BankProtocol {
     
     private let constant: Constant = .init()
     private var bankerList: [Banker]
+    
     private var customerQueue: BankCustomerQueue<BankCustomer>
+    private var depositCustomerQueue: BankCustomerQueue<BankCustomer>
+    private var loanCustomerQueue: BankCustomerQueue<BankCustomer>
+    
     private var completedCustomerCount: Int = .zero
     private var totalWorkedTime: TimeInterval = .zero
     
     init(bankerCount: Int = 1) {
         self.bankerList = .init(repeating: Banker(), count: bankerCount)
         self.customerQueue = .init()
+        self.depositCustomerQueue = .init()
+        self.loanCustomerQueue = .init()
+        
+        configure()
+    }
+    
+    private mutating func configure() {
+        arrangeCustomerQueue()
+        separateCustomerQueue()
+    }
+    
+    private mutating func arrangeCustomerQueue() {
         let randomNumber = Int.random(in: constant.customerCountRange)
         
         for _ in 1...randomNumber {
             let bankCustomer: BankCustomer = .init(customerType: .deposit)
             customerQueue.enqueue(bankCustomer)
+        }
+    }
+    
+    private mutating func separateCustomerQueue() {
+        while let customer = customerQueue.dequeue() {
+            switch customer.type {
+            case .deposit:
+                depositCustomerQueue.enqueue(customer)
+            case .loan:
+                loanCustomerQueue.enqueue(customer)
+            }
         }
     }
     
