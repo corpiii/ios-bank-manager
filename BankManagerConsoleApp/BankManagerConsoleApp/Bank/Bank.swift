@@ -29,38 +29,38 @@ struct Bank: BankProtocol {
     private let constant: Constant = .init()
     private let banker: Banker = .init()
     
-    private var customerQueue: BankCustomerQueue<BankCustomer>
-    private var depositCustomerQueue: BankCustomerQueue<BankCustomer>
-    private var loanCustomerQueue: BankCustomerQueue<BankCustomer>
+    private var customerQueue: BankCustomerQueue<BankCustomer> = .init()
+    private var depositCustomerQueue: BankCustomerQueue<BankCustomer> = .init()
+    private var loanCustomerQueue: BankCustomerQueue<BankCustomer> = .init()
     
-    private var depositOperationQueue: OperationQueue
-    private var loanOperationQueue: OperationQueue
+    private var depositOperationQueue: OperationQueue = .init()
+    private var loanOperationQueue: OperationQueue = .init()
     
     private static var completedCustomerCount: Int = .zero
     private var totalWorkedTime: TimeInterval = .zero
     
     init(depositDeskCount: Int, loanDeskCount: Int) {
-        self.customerQueue = .init()
-        self.depositCustomerQueue = .init()
-        self.loanCustomerQueue = .init()
-        self.depositOperationQueue = .init()
         self.depositOperationQueue.maxConcurrentOperationCount = depositDeskCount
-        self.loanOperationQueue = .init()
         self.loanOperationQueue.maxConcurrentOperationCount = loanDeskCount
-        
-        configure()
     }
     
     private mutating func configure() {
         arrangeCustomerQueue()
         separateCustomerQueue()
+        
+        Self.completedCustomerCount = 0
+        BankCustomer.resetCustomerNumber()
     }
     
     private mutating func arrangeCustomerQueue() {
         let randomNumber = Int.random(in: constant.customerCountRange)
         
         for _ in 1...randomNumber {
-            let bankCustomer: BankCustomer = .init(customerType: .deposit)
+            guard let customerType = CustomerType.allCases.randomElement() else {
+                return
+            }
+            
+            let bankCustomer: BankCustomer = .init(customerType)
             customerQueue.enqueue(bankCustomer)
         }
     }
@@ -84,6 +84,7 @@ struct Bank: BankProtocol {
             
             switch menu {
             case constant.openOption:
+                configure()
                 open()
             case constant.closeOption:
                 return
@@ -99,9 +100,13 @@ struct Bank: BankProtocol {
     
     private mutating func open() {
         let startTime = Date()
+        
         deposit()
+        loan()
         
         depositOperationQueue.waitUntilAllOperationsAreFinished()
+        loanOperationQueue.waitUntilAllOperationsAreFinished()
+        
         let endTime = Date()
         self.totalWorkedTime = endTime.timeIntervalSince(startTime)
         close()
@@ -114,6 +119,16 @@ struct Bank: BankProtocol {
                 Self.completedCustomerCount += 1
             }
             depositOperationQueue.addOperation(operation)
+        }
+    }
+    
+    private mutating func loan() {
+        while let customer = loanCustomerQueue.dequeue() {
+            let operation = banker.work(customer)
+            operation.completionBlock = {
+                Self.completedCustomerCount += 1
+            }
+            loanOperationQueue.addOperation(operation)
         }
     }
     
