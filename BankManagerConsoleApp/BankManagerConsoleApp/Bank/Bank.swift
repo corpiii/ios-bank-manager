@@ -27,20 +27,26 @@ struct Bank: BankProtocol {
     }
     
     private let constant: Constant = .init()
-    private var bankerList: [Banker]
+    private let banker: Banker = .init()
     
     private var customerQueue: BankCustomerQueue<BankCustomer>
     private var depositCustomerQueue: BankCustomerQueue<BankCustomer>
     private var loanCustomerQueue: BankCustomerQueue<BankCustomer>
     
-    private var completedCustomerCount: Int = .zero
+    private var depositOperationQueue: OperationQueue
+    private var loanOperationQueue: OperationQueue
+    
+    private static var completedCustomerCount: Int = .zero
     private var totalWorkedTime: TimeInterval = .zero
     
-    init(bankerCount: Int = 1) {
-        self.bankerList = .init(repeating: Banker(), count: bankerCount)
+    init(depositDeskCount: Int, loanDeskCount: Int) {
         self.customerQueue = .init()
         self.depositCustomerQueue = .init()
         self.loanCustomerQueue = .init()
+        self.depositOperationQueue = .init()
+        self.depositOperationQueue.maxConcurrentOperationCount = depositDeskCount
+        self.loanOperationQueue = .init()
+        self.loanOperationQueue.maxConcurrentOperationCount = loanDeskCount
         
         configure()
     }
@@ -93,21 +99,25 @@ struct Bank: BankProtocol {
     
     private mutating func open() {
         let startTime = Date()
-        work()
+        deposit()
+        
+        depositOperationQueue.waitUntilAllOperationsAreFinished()
         let endTime = Date()
         self.totalWorkedTime = endTime.timeIntervalSince(startTime)
         close()
     }
     
-    private mutating func work() {
-        let banker: Banker = bankerList.removeFirst()
-        while let customer = customerQueue.dequeue() {
-            banker.work(customer)
-            completedCustomerCount += 1
+    private mutating func deposit() {
+        while let customer = depositCustomerQueue.dequeue() {
+            let operation = banker.work(customer)
+            operation.completionBlock = {
+                Self.completedCustomerCount += 1
+            }
+            depositOperationQueue.addOperation(operation)
         }
     }
     
     private func close() {
-        print(constant.closingMent(completedCustomerCount, totalWorkedTime))
+        print(constant.closingMent(Self.completedCustomerCount, totalWorkedTime))
     }
 }
